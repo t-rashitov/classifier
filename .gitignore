@@ -1,0 +1,31 @@
+__pycache__
+
+media/
+
+# pycharm
+.idea
+*.pyc
+.DS_Store
+.di
+
+# environment
+venv/
+*.env
+
+# pytest
+.pytest_cache
+
+
+dump.sql*
+dump.rdb
+celerybeat-schedule
+celerybeat.pid
+
+# files with prefix test- in name
+test-*.*
+# directories with prefix test- in name
+test-*/
+
+
+# pyenv version files
+*.python-version

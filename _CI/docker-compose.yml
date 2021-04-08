@@ -1,0 +1,13 @@
+version: '3.3'
+
+services:
+  web:
+    restart: always
+    image: text_classification
+    container_name: text_classification
+    ports:
+    - 6000:6000
+    build:
+      context: ../
+      dockerfile: _CI/Dockerfile
+    command: gunicorn --bind 0.0.0.0:6000 text_classification.wsgi:app --max-requests=50 --max-requests-jitter=25 --workers=5 --timeout=60
