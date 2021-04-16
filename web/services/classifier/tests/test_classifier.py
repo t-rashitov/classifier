@@ -76,7 +76,7 @@ def test_parser_text_replacing(classifier):
 
     assert len(parsed_strings) == 1
 
-    assert parsed_strings[0] == ('test тест е ' * 10)
+    assert parsed_strings[0] == ('test тест е ' * 10 + '\n')
 
 
 @pytest.mark.parser

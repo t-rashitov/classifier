@@ -6,6 +6,8 @@ import re
 from random import shuffle
 from typing import Any
 
+import numpy as np
+import pandas as pd
 from pymorphy2 import MorphAnalyzer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -286,7 +288,17 @@ class NewsClassifier:
 
         data_vectors = vectorizer.transform(articles).toarray()
 
-        return [classifier.predict([vector])[0] for vector in data_vectors]
+        vector_frame = pd.DataFrame(classifier.predict_proba(data_vectors), columns=classifier.classes_)
+        values_frame = pd.DataFrame(vector_frame.columns.values[np.argsort(-vector_frame.values)[:, :3]])
+
+        predicted = [(
+                (row[0], vector_frame.iloc[i, vector_frame.columns.get_loc(row[0])]),
+                (row[1], vector_frame.iloc[i, vector_frame.columns.get_loc(row[1])]),
+                (row[2], vector_frame.iloc[i, vector_frame.columns.get_loc(row[2])])
+            ) for i, row in enumerate(list(values_frame.itertuples(index=False, name=None)))
+        ]
+
+        return predicted
 
     def test_predicted(self) -> None:
         """
@@ -313,13 +325,15 @@ class NewsClassifier:
 
             counter = 0
 
-            for i, category in enumerate(predicted_categories):
-                logger.debug(f'{i}. Рубрика: {categories[i].rstrip()} -> классифицировано как: {category}')
+            for i, predicted_category in enumerate(predicted_categories):
+                logger.debug(f'{i}. Рубрика: {categories[i].rstrip()} -> классифицировано как: {predicted_category}')
 
                 real_categories = categories[i].split()
 
-                if category in real_categories:
-                    counter += 1
+                for real_category in real_categories:
+                    if real_category in [category for category, _ in predicted_category]:
+                        counter += 1
+                        break
 
             accuracy = counter / len(categories)
 
