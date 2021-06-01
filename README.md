@@ -15,15 +15,19 @@
 `Армия`
 `Игры`
 
-**Для запуска сервера:**
+**Установка зависимостей:**
 
-`gunicorn --bind 0.0.0.0:5000 text_classification.wsgi:app  --workers=8 --timeout=60`
+`pip install -r requirements.txt`
 
-**Для запуска тестов:**
+**Запуск сервера:**
+
+`gunicorn --bind <HOST>:<PORT> text_classification.wsgi:app  --workers=8 --timeout=60`
+
+**Запуск тестов:**
 
 `pytest [-m <files | parser>]`
 
-Для классификации текстов отправить **POST** запрос на `0.0.0.0:5000`
+Для классификации текстов отправить **POST** запрос на `<HOST>:<PORT>`
 
 В теле запроса переда данные в формате **JSON**
 
