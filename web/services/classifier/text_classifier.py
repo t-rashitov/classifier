@@ -154,7 +154,7 @@ class NewsClassifier:
         logger.debug(f'Texts write to file: {len(parsed_articles)}')
 
     @classmethod
-    def _get_articles_with_title(cls, path: str, title: str) -> []:
+    def _get_articles_with_title(cls, path: str, title: str) -> list:
         """
         Метод для обработки и маппинга статей из текстового файла
         :param path: путь до файла со статьями
