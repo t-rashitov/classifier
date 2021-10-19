@@ -18,17 +18,15 @@ logger = logging.getLogger(__name__)
 BASE_DIR = pathlib.Path(__file__).parent
 
 try:
-    russian_stopwords = open(os.path.join(BASE_DIR, 'stopwords/russian.txt')).readlines()
+    russian_stopwords = tuple(open(os.path.join(BASE_DIR, 'stopwords/russian.txt')).read().splitlines())
 except FileNotFoundError:
-    russian_stopwords = []
+    russian_stopwords = ()
 
 morph_analyzer = MorphAnalyzer()
 
 
 class NewsClassifier:
-    """
-    Класс для создания модели классификатора новостных материалов по рубрикам
-    """
+    """Класс для создания модели классификатора новостных материалов по рубрикам"""
 
     def __init__(
             self,
@@ -75,52 +73,69 @@ class NewsClassifier:
         )
 
     @classmethod
-    def parse_articles(cls, articles: list) -> list:
+    def read_from_file(cls, file_path: str) -> list[str]:
+        """
+        Метод считывает список текстов из файла
+        :param file_path: путь до файла с текстом
+        :return: список текстов
         """
 
+        with open(file_path) as file:
+            return file.read().splitlines()
+
+    @classmethod
+    def write_to_file(cls, texts: list[str], file_path: str, mode: str = 'w', separator: str = '\n') -> None:
+        """
+        Метод записывает список текстов в файл
+        :param texts: список текстов
+        :param file_path: пусть до файла
+        :param mode: режим открытия файла
+        :param separator: разделительный символ
+        :return:
+        """
+
+        with open(file_path, mode) as file:
+            file.write(separator.join(texts))
+
+    @classmethod
+    def parse(cls, articles: list) -> list:
+        """
+        Метод для обработки текстов
         :param articles: список новостных статей
-        :return parsed_articles: список предобработанных статей
+        :return parsed_texts: список предобработанных текстов
         """
 
-        parsed_articles = []
+        parsed_texts = []
 
         for article in articles:
-            article = article.lower().replace('ё', 'е')
 
-            if 'http' in article:
-                continue
-
-            # article = re.sub(r'[^a-zа-я\s]', '', article)
-            article = re.sub(r'[^a-zа-я ]', '', article)
+            article = re.sub(r'[^a-zа-яё ]', '', article.lower())
             article = re.sub(r' +', ' ', article)
-            article = article.lstrip()
+            article = article.strip()
             words = []
 
-            for word in article.split(' '):
+            for word in article.split():
 
                 if word not in russian_stopwords:
 
                     if len(word) > 1:
                         try:
                             words.append(morph_analyzer.parse(word)[0].normal_form)
-                        except (AttributeError, IndexError):
-                            logger.warning(f"Word <{word}> hasn't been changed.")
+                        except (AttributeError, IndexError) as e:
+                            logger.error(str(e))
+                            logger.debug(f'Word <{word}> hasn\'t been changed.')
                             words.append(word)
 
-                    else:
-                        words.append(word)
-
             if len(words) < 10:
+                logger.debug('The number of words in the text is less than 10.')
                 continue
 
-            words_line = ' '.join(words)
+            parsed_texts.append(' '.join(words))
 
-            parsed_articles.append(words_line + '\n')
-
-        return parsed_articles
+        return parsed_texts
 
     @classmethod
-    def parse_from_file(cls, input_file_path: str, output_file_path: str):
+    def parse_from_file(cls, input_file_path: str, output_file_path: str) -> None:
         """
         Метод для обработки текста статей из файла
         :param input_file_path: путь до входящего файла со статьями
@@ -128,21 +143,15 @@ class NewsClassifier:
         :return:
         """
 
-        file = open(input_file_path)
+        articles = cls.read_from_file(input_file_path)
 
-        try:
-            articles = file.readlines()
-        finally:
-            file.close()
+        logger.debug(f'Texts read from file: {len(articles)}')
 
-        logger.debug(f'articles count: {len(articles)}')
+        parsed_articles = cls.parse(articles)
 
-        parsed_articles = cls.parse_articles(articles)
+        cls.write_to_file(texts=parsed_articles, file_path=output_file_path)
 
-        with open(output_file_path, 'w') as file:
-            file.writelines(parsed_articles)
-
-        logger.debug(f'parsed articles count: {len(parsed_articles)}')
+        logger.debug(f'Texts write to file: {len(parsed_articles)}')
 
     @classmethod
     def _get_articles_with_title(cls, path: str, title: str) -> []:
@@ -150,31 +159,22 @@ class NewsClassifier:
         Метод для обработки и маппинга статей из текстового файла
         :param path: путь до файла со статьями
         :param title: заголовок для статей
-        :return: []
+        :return: список статей с заголовками
         """
 
-        file = open(path)
-
-        try:
-            return [(title, item) for item in file.readlines() if len(item) > 2]
-        finally:
-            file.close()
+        with open(path) as file:
+            return [(title, item) for item in file.read().splitlines() if len(item) > 2]
 
     @classmethod
     def load_object(cls, path: str) -> Any:
         """
         Метод десериализации объекта из файла
         :param path: Пусть до файла сериализованного объекта
-        :return:
+        :return: десериализованный объект
         """
-        dumped_file = open(path, 'rb')
 
-        try:
-            deserialized_object = pickle.load(dumped_file)
-        finally:
-            dumped_file.close()
-
-        return deserialized_object
+        with open(path, 'rb') as dumped_file:
+            return pickle.load(dumped_file)
 
     def _load_vectorizer(self) -> TfidfVectorizer:
         """
@@ -203,7 +203,7 @@ class NewsClassifier:
         :param dump_vectorizer: определяет нужно ли сохранять вектор
         :param dump_classifier: определяет нужно ли сохранять обученный классификатор
         :param parse_files: определяется нужно ли обрабатывать файлы обучающего датасета
-        :return: объект RandomForestClassifier
+        :return classifier: объект RandomForestClassifier
         """
 
         if parse_files:
@@ -230,12 +230,8 @@ class NewsClassifier:
 
         if dump_vectorizer:
 
-            dump_file = open(os.path.join(BASE_DIR, 'dumped_vectorizer.pkl'), 'wb')
-
-            try:
+            with open(os.path.join(BASE_DIR, 'dumped_vectorizer.pkl'), 'wb') as dump_file:
                 pickle.dump(vectorizer, dump_file)
-            finally:
-                dump_file.close()
 
         training_data_vector = vectorizer.transform(texts)
 
@@ -253,12 +249,8 @@ class NewsClassifier:
 
         if dump_classifier:
 
-            dump_file = open(os.path.join(BASE_DIR, 'dumped_classifier.pkl'), 'wb')
-
-            try:
+            with open(os.path.join(BASE_DIR, 'dumped_classifier.pkl'), 'wb') as dump_file:
                 pickle.dump(classifier, dump_file)
-            finally:
-                dump_file.close()
 
         return classifier
 
@@ -268,7 +260,7 @@ class NewsClassifier:
 
         :param articles: новостные статьи для определения категорий
         :param load_model: определяет нужно ли загрузить сериализованную ранее модель
-        :return: список предсказанных рубрик
+        :return predicted: список предсказанных рубрик
         """
 
         if load_model:
@@ -277,9 +269,9 @@ class NewsClassifier:
             classifier = self._train_model(dump_vectorizer=True, dump_classifier=True, parse_files=True)
 
         if not articles:
-            articles = open(os.path.join(BASE_DIR, self.test_data_path, self.test_parsed_news_file_name)).readlines()
+            articles = self.read_from_file(os.path.join(BASE_DIR, self.test_data_path, self.test_parsed_news_file_name))
         else:
-            articles = self.parse_articles(articles)
+            articles = self.parse(articles)
 
         if not articles:
             return []
@@ -300,10 +292,10 @@ class NewsClassifier:
 
         return predicted
 
-    def test_predicted(self) -> None:
+    def test_predicted(self) -> float:
         """
         Метод для запуска тестирования классификатора на тестовом датасете
-        :return:
+        :return accuracy: точность классификации
         """
 
         self.parse_from_file(
@@ -313,28 +305,21 @@ class NewsClassifier:
 
         predicted_categories = self.get_predicted_category(load_model=True)
 
-        file = open(os.path.join(BASE_DIR, self.test_data_path, self.test_titles_file_name))
-        try:
-            categories = file.readlines()
-        finally:
-            file.close()
+        categories = self.read_from_file(os.path.join(BASE_DIR, self.test_data_path, self.test_titles_file_name))
 
-        logger.debug(f'titles: {len(categories)} articles: {len(predicted_categories)}')
+        logger.debug(f'Count of titles: {len(categories)}, articles: {len(predicted_categories)}')
 
-        if len(categories) == len(predicted_categories):
+        assert len(categories) == len(predicted_categories), \
+            'Количество полученных рубрик не совпадает с количеством контрольных.'
 
-            counter = 0
+        correctly_predicted = [
+            (real, predicted) for real, predicted in zip(categories, predicted_categories)
+            if set(real.split()).intersection(set(dict(predicted).keys()))]
 
-            for i, predicted_category in enumerate(predicted_categories):
-                logger.debug(f'{i}. Рубрика: {categories[i].rstrip()} -> классифицировано как: {predicted_category}')
+        accuracy = len(correctly_predicted) / len(categories)
 
-                real_categories = categories[i].split()
+        logger.debug('\n'.join(
+            [f'{real}, классифицировано как: {predicted}' for real, predicted in correctly_predicted]))
+        logger.debug(f'{accuracy=}')
 
-                for real_category in real_categories:
-                    if real_category in [category for category, _ in predicted_category]:
-                        counter += 1
-                        break
-
-            accuracy = counter / len(categories)
-
-            logger.info(f'{accuracy=}')
+        return accuracy
