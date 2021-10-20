@@ -3,11 +3,11 @@ version: '3.3'
 services:
   web:
     restart: always
-    image: text_classification
-    container_name: text_classification
+    image: classifier
+    container_name: classifier
     ports:
-    - 6000:6000
+    - "6000:6000"
     build:
       context: ../
       dockerfile: _CI/Dockerfile
-    command: gunicorn --bind 0.0.0.0:6000 text_classification.wsgi:app --workers=8 --timeout=60
+    command: gunicorn --bind 0.0.0.0:6000 classifier.wsgi:app --workers=8 --timeout=60
