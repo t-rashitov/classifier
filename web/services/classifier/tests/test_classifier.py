@@ -34,7 +34,7 @@ def test_titles_file_exists(classifier):
 def test_dumped_classifier_file_exists():
     """Провека существования файлов дампа модели классификатора"""
 
-    assert os.path.isfile(os.path.join(BASE_DIR, 'dumped_classifier.pkl'))
+    assert os.path.isfile(os.path.join(BASE_DIR, 'dumped_classifier.joblib'))
 
 
 @pytest.mark.files
@@ -42,7 +42,7 @@ def test_dumped_classifier_file_exists():
 def test_dumped_vectorizer_file_exists():
     """Провека существования файлов дампа индекса классификатора"""
 
-    assert os.path.isfile(os.path.join(BASE_DIR, 'dumped_vectorizer.pkl'))
+    assert os.path.isfile(os.path.join(BASE_DIR, 'dumped_vectorizer.joblib'))
 
 
 @pytest.mark.files

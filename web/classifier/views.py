@@ -8,13 +8,12 @@ news_classifier = NewsClassifier.get_default_classifier()
 
 
 @app.route('/', methods=('POST',))
-def predict():
+def predict_view():
     if request.method == 'POST':
 
         data = request.get_json()
-
         articles = data.get('articles')
 
-        predicted = news_classifier.get_predicted_category(articles=articles, load_model=True)
+        predicted = news_classifier.get_predicted_category(articles=articles)
 
         return jsonify(dict(predicted=predicted))
