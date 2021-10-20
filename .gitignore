@@ -14,6 +14,7 @@ venv/
 
 # pytest
 .pytest_cache
+.coverage
 
 # locust
 locust/

@@ -12,6 +12,8 @@ from pymorphy2 import MorphAnalyzer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
 
+from services.classifier.exceptions import ModelFileError
+
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
@@ -36,7 +38,9 @@ class NewsClassifier:
             test_titles_file_name: str,
             unparsed_data_path: str,
             parsed_data_path: str,
-            test_data_path: str
+            test_data_path: str,
+            classifier: RandomForestClassifier = None,
+            vectorizer: TfidfVectorizer = None
 
     ):
         self.topic_files_names_with_titles = topic_files_names_with_titles
@@ -46,10 +50,12 @@ class NewsClassifier:
         self.unparsed_data_path = unparsed_data_path
         self.parsed_data_path = parsed_data_path
         self.test_data_path = test_data_path
+        self.classifier = classifier
+        self.vectorizer = vectorizer
 
     @classmethod
     def get_default_classifier(cls):
-        return cls(
+        instance = cls(
             topic_files_names_with_titles=(
                 ('politics.txt', 'политика'),
                 ('society.txt', 'общество'),
@@ -69,11 +75,20 @@ class NewsClassifier:
             test_titles_file_name='test_titles.txt',
             unparsed_data_path='data_unparsed',
             parsed_data_path='data_parsed',
-            test_data_path='data_test'
+            test_data_path='data_test',
         )
 
+        try:
+            instance.classifier = cls._load_classifier()
+            instance.vectorizer = cls._load_vectorizer()
+        except FileNotFoundError:
+            logger.debug('Model file not found. Training new model.')
+            instance.train_model(dump_vectorizer=True, dump_classifier=True, parse_files=True)
+
+        return instance
+
     @classmethod
-    def read_from_file(cls, file_path: str) -> list[str]:
+    def _read_from_file(cls, file_path: str) -> list[str]:
         """
         Метод считывает список текстов из файла
         :param file_path: путь до файла с текстом
@@ -84,7 +99,7 @@ class NewsClassifier:
             return file.read().splitlines()
 
     @classmethod
-    def write_to_file(cls, texts: list[str], file_path: str, mode: str = 'w', separator: str = '\n') -> None:
+    def _write_to_file(cls, texts: list[str], file_path: str, mode: str = 'w', separator: str = '\n') -> None:
         """
         Метод записывает список текстов в файл
         :param texts: список текстов
@@ -143,13 +158,13 @@ class NewsClassifier:
         :return:
         """
 
-        articles = cls.read_from_file(input_file_path)
+        articles = cls._read_from_file(input_file_path)
 
         logger.debug(f'Texts read from file: {len(articles)}')
 
         parsed_articles = cls.parse(articles)
 
-        cls.write_to_file(texts=parsed_articles, file_path=output_file_path)
+        cls._write_to_file(texts=parsed_articles, file_path=output_file_path)
 
         logger.debug(f'Texts write to file: {len(parsed_articles)}')
 
@@ -166,7 +181,7 @@ class NewsClassifier:
             return [(title, item) for item in file.read().splitlines() if len(item) > 2]
 
     @classmethod
-    def load_object(cls, path: str) -> Any:
+    def _load_object(cls, path: str) -> Any:
         """
         Метод десериализации объекта из файла
         :param path: Пусть до файла сериализованного объекта
@@ -176,34 +191,36 @@ class NewsClassifier:
         with open(path, 'rb') as dumped_file:
             return pickle.load(dumped_file)
 
-    def _load_vectorizer(self) -> TfidfVectorizer:
+    @classmethod
+    def _load_vectorizer(cls) -> TfidfVectorizer:
         """
         Метод возвращает десериализованный объект векторизатора
         :return: объект TfidfVectorizer
         """
 
-        return self.load_object(os.path.join(BASE_DIR, 'dumped_vectorizer.pkl'))
+        return cls._load_object(os.path.join(BASE_DIR, 'dumped_vectorizer.pkl'))
 
-    def _load_classifier(self) -> RandomForestClassifier:
+    @classmethod
+    def _load_classifier(cls) -> RandomForestClassifier:
         """
         Метод возвращает десериализованный объект обученного классификатора
         :return: объект RandomForestClassifier
         """
 
-        return self.load_object(os.path.join(BASE_DIR, 'dumped_classifier.pkl'))
+        return cls._load_object(os.path.join(BASE_DIR, 'dumped_classifier.pkl'))
 
-    def _train_model(
+    def train_model(
             self,
             dump_vectorizer: bool = True,
-            dump_classifier: bool = False,
-            parse_files: bool = False
-    ) -> RandomForestClassifier:
+            dump_classifier: bool = True,
+            parse_files: bool = True
+    ) -> None:
         """
         Метод обучения модели
         :param dump_vectorizer: определяет нужно ли сохранять вектор
         :param dump_classifier: определяет нужно ли сохранять обученный классификатор
         :param parse_files: определяется нужно ли обрабатывать файлы обучающего датасета
-        :return classifier: объект RandomForestClassifier
+        :return:
         """
 
         if parse_files:
@@ -229,14 +246,12 @@ class NewsClassifier:
         vectorizer.fit_transform(texts)
 
         if dump_vectorizer:
-
             with open(os.path.join(BASE_DIR, 'dumped_vectorizer.pkl'), 'wb') as dump_file:
                 pickle.dump(vectorizer, dump_file)
 
         training_data_vector = vectorizer.transform(texts)
 
         classifier = RandomForestClassifier(n_estimators=100, n_jobs=8)
-
         classifier.fit(training_data_vector, titles)
 
         texts, titles = [], []
@@ -248,39 +263,31 @@ class NewsClassifier:
         classifier.fit(training_data_vector, titles)
 
         if dump_classifier:
-
             with open(os.path.join(BASE_DIR, 'dumped_classifier.pkl'), 'wb') as dump_file:
                 pickle.dump(classifier, dump_file)
 
-        return classifier
+        self.vectorizer = vectorizer
+        self.classifier = classifier
 
-    def get_predicted_category(self, articles: list = None, load_model: bool = False) -> list:
+    def get_predicted_category(self, articles: list) -> list:
         """
         Классификация текста на основе обученной модели
 
         :param articles: новостные статьи для определения категорий
-        :param load_model: определяет нужно ли загрузить сериализованную ранее модель
         :return predicted: список предсказанных рубрик
         """
 
-        if load_model:
-            classifier = self._load_classifier()
-        else:
-            classifier = self._train_model(dump_vectorizer=True, dump_classifier=True, parse_files=True)
-
-        if not articles:
-            articles = self.read_from_file(os.path.join(BASE_DIR, self.test_data_path, self.test_parsed_news_file_name))
-        else:
-            articles = self.parse(articles)
+        articles = self.parse(articles)
 
         if not articles:
             return []
 
-        vectorizer = self._load_vectorizer()
+        if not (self.classifier and self.vectorizer):
+            raise ModelFileError('Classifier model files does not exists. Run train_model() for create model.')
 
-        data_vectors = vectorizer.transform(articles).toarray()
+        data_vectors = self.vectorizer.transform(articles).toarray()
 
-        vector_frame = pd.DataFrame(classifier.predict_proba(data_vectors), columns=classifier.classes_)
+        vector_frame = pd.DataFrame(self.classifier.predict_proba(data_vectors), columns=self.classifier.classes_)
         values_frame = pd.DataFrame(vector_frame.columns.values[np.argsort(-vector_frame.values)[:, :3]])
 
         predicted = [(
@@ -303,23 +310,23 @@ class NewsClassifier:
             os.path.join(BASE_DIR, self.test_data_path, self.test_parsed_news_file_name)
         )
 
-        predicted_categories = self.get_predicted_category(load_model=True)
+        real_categories = self._read_from_file(os.path.join(BASE_DIR, self.test_data_path, self.test_titles_file_name))
+        predicted_categories = self.get_predicted_category(
+            articles=self._read_from_file(os.path.join(BASE_DIR, self.test_data_path, self.test_parsed_news_file_name)))
 
-        categories = self.read_from_file(os.path.join(BASE_DIR, self.test_data_path, self.test_titles_file_name))
+        logger.debug(f'Count of titles: {len(real_categories)}, articles: {len(predicted_categories)}')
 
-        logger.debug(f'Count of titles: {len(categories)}, articles: {len(predicted_categories)}')
-
-        assert len(categories) == len(predicted_categories), \
-            'Количество полученных рубрик не совпадает с количеством контрольных.'
+        assert len(real_categories) == len(predicted_categories), \
+            'The number of headings received does not match the number of controls.'
 
         correctly_predicted = [
-            (real, predicted) for real, predicted in zip(categories, predicted_categories)
+            (real, predicted) for real, predicted in zip(real_categories, predicted_categories)
             if set(real.split()).intersection(set(dict(predicted).keys()))]
 
-        accuracy = len(correctly_predicted) / len(categories)
+        accuracy = len(correctly_predicted) / len(real_categories)
 
         logger.debug('\n'.join(
-            [f'{real}, классифицировано как: {predicted}' for real, predicted in correctly_predicted]))
+            [f'{real}, classified as: {predicted}' for real, predicted in correctly_predicted]))
         logger.debug(f'{accuracy=}')
 
         return accuracy

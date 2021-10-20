@@ -90,9 +90,9 @@ def test_parser_from_file(classifier):
     lines = [' '.join([title for _ in range(10)]) for _, title in classifier.topic_files_names_with_titles]
 
     try:
-        classifier.write_to_file(texts=lines, file_path='test_unparsed_articles.txt')
+        classifier._write_to_file(texts=lines, file_path='test_unparsed_articles.txt')
         classifier.parse_from_file('test_unparsed_articles.txt', 'test_parsed_articles.txt')
-        articles = classifier.read_from_file('test_parsed_articles.txt')
+        articles = classifier._read_from_file('test_parsed_articles.txt')
 
     finally:
         os.remove('test_unparsed_articles.txt')
