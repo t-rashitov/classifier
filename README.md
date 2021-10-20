@@ -21,13 +21,19 @@
 
 **Запуск сервера:**
 
-`gunicorn --bind <HOST>:<PORT> text_classification.wsgi:app  --workers=8 --timeout=60`
+`gunicorn --bind <HOST>:<PORT> classifier.wsgi:app  --workers=8 --timeout=60`
+
+**Запуск проекта в docker контейнере:**
+
+`sudo docker-compose -f _CI/docker-compose.yml build`
+
+`sudo docker-compose -f _CI/docker-compose.yml up`
 
 **Запуск тестов:**
 
 `pytest [-m <files | parser>]`
 
-Для классификации текстов отправить **POST** запрос на `<HOST>:<PORT>`
+Для классификации текстов отправить **POST** запрос на `<HOST>:<PORT>/`
 
 В теле запроса переда данные в формате **JSON**
 
