@@ -1,11 +1,11 @@
 import logging
 import os
 import pathlib
-import pickle
 import re
 from random import shuffle
 from typing import Any
 
+import joblib
 import numpy as np
 import pandas as pd
 from pymorphy2 import MorphAnalyzer
@@ -189,7 +189,18 @@ class NewsClassifier:
         """
 
         with open(path, 'rb') as dumped_file:
-            return pickle.load(dumped_file)
+            return joblib.load(dumped_file)
+
+    @classmethod
+    def _dump_object(cls, obj: Any, path: str) -> None:
+        """
+        Метод сериализации объекта в файл
+        :param path: Пусть сохранения файла сериализованного объекта
+        :return:
+        """
+
+        with open(path, 'wb') as dump_file:
+            joblib.dump(obj, dump_file)
 
     @classmethod
     def _load_vectorizer(cls) -> TfidfVectorizer:
@@ -198,7 +209,7 @@ class NewsClassifier:
         :return: объект TfidfVectorizer
         """
 
-        return cls._load_object(os.path.join(BASE_DIR, 'dumped_vectorizer.pkl'))
+        return cls._load_object(os.path.join(BASE_DIR, 'dumped_vectorizer.joblib'))
 
     @classmethod
     def _load_classifier(cls) -> RandomForestClassifier:
@@ -207,7 +218,7 @@ class NewsClassifier:
         :return: объект RandomForestClassifier
         """
 
-        return cls._load_object(os.path.join(BASE_DIR, 'dumped_classifier.pkl'))
+        return cls._load_object(os.path.join(BASE_DIR, 'dumped_classifier.joblib'))
 
     def train_model(
             self,
@@ -246,8 +257,7 @@ class NewsClassifier:
         vectorizer.fit_transform(texts)
 
         if dump_vectorizer:
-            with open(os.path.join(BASE_DIR, 'dumped_vectorizer.pkl'), 'wb') as dump_file:
-                pickle.dump(vectorizer, dump_file)
+            self._dump_object(vectorizer, os.path.join(BASE_DIR, 'dumped_vectorizer.joblib'))
 
         training_data_vector = vectorizer.transform(texts)
 
@@ -263,8 +273,7 @@ class NewsClassifier:
         classifier.fit(training_data_vector, titles)
 
         if dump_classifier:
-            with open(os.path.join(BASE_DIR, 'dumped_classifier.pkl'), 'wb') as dump_file:
-                pickle.dump(classifier, dump_file)
+            self._dump_object(classifier, os.path.join(BASE_DIR, 'dumped_classifier.joblib'))
 
         self.vectorizer = vectorizer
         self.classifier = classifier
